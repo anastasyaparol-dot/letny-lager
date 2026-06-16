@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Летний лагерь ☀️</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      safelist: [
+        'bg-blue-50','bg-blue-100','bg-blue-400','bg-blue-500','border-blue-200','text-blue-700','hover:bg-blue-600',
+        'bg-green-50','bg-green-100','bg-green-400','bg-green-500','border-green-200','text-green-700','hover:bg-green-600',
+        'bg-orange-50','bg-orange-100','bg-orange-400','bg-orange-500','border-orange-200','text-orange-700','hover:bg-orange-600',
+        'bg-red-50','bg-red-100','bg-red-400','bg-red-500','border-red-200','text-red-700','hover:bg-red-600',
+        'bg-amber-50','bg-amber-100','bg-amber-400','bg-amber-500','border-amber-200','text-amber-700','hover:bg-amber-600',
+        'bg-purple-50','bg-purple-100','bg-purple-400','bg-purple-500','border-purple-200','text-purple-700','hover:bg-purple-600',
+      ]
+    }
+  </script>
+  <style>
+    * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .fade-in { animation: fi 0.25s ease; }
+    @keyframes fi { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+    .photo-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+    .photo-thumb { width:100%; aspect-ratio:3/4; object-fit:cover; border-radius:12px; }
+  </style>
+</head>
+<body class="bg-amber-50 min-h-screen">
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useCallback, useRef } = React;
+
+// ── Данные: занятия ──────────────────────────────────────────────────────────
+
+const BLOCKS = [
+  { id:'reading',   name:'Чтение',   emoji:'📖', desc:'Звуки, буквы и слоги' },
+  { id:'motorics',  name:'Моторика', emoji:'✋', desc:'Мелкая моторика рук' },
+  { id:'sculpting', name:'Лепка',    emoji:'🎨', desc:'Пластилин и творчество' },
+  { id:'movement',  name:'Движение', emoji:'⭐', desc:'Мягкая физическая активность' },
+  { id:'emotions',  name:'Эмоции',   emoji:'💛', desc:'Чувства и общение' },
+  { id:'logic',     name:'Логика',   emoji:'🧩', desc:'Мышление и анализ' },
+];
+
+const WEEK_SCHEDULE = [null,'reading','motorics','sculpting','movement','emotions','logic'];
+
+const S = {
+  reading:   { bg:'bg-blue-50',   border:'border-blue-200',   text:'text-blue-700',   btn:'bg-blue-500 hover:bg-blue-600',   tag:'bg-blue-100 text-blue-700',   bar:'bg-blue-400'   },
+  motorics:  { bg:'bg-green-50',  border:'border-green-200',  text:'text-green-700',  btn:'bg-green-500 hover:bg-green-600',  tag:'bg-green-100 text-green-700',  bar:'bg-green-400'  },
+  sculpting: { bg:'bg-orange-50', border:'border-orange-200', text:'text-orange-700', btn:'bg-orange-500 hover:bg-orange-600', tag:'bg-orange-100 text-orange-700', bar:'bg-orange-400' },
+  movement:  { bg:'bg-red-50',    border:'border-red-200',    text:'text-red-700',    btn:'bg-red-500 hover:bg-red-600',      tag:'bg-red-100 text-red-700',      bar:'bg-red-400'    },
+  emotions:  { bg:'bg-amber-50',  border:'border-amber-200',  text:'text-amber-700',  btn:'bg-amber-500 hover:bg-amber-600',  tag:'bg-amber-100 text-amber-700',  bar:'bg-amber-400'  },
+  logic:     { bg:'bg-purple-50', border:'border-purple-200', text:'text-purple-700', btn:'bg-purple-500 hover:bg-purple-600', tag:'bg-purple-100 text-purple-700', bar:'bg-purple-400' },
+};
+
+const WARMUPS = [
+  { id:'w1', name:'Пальчики «Капуста»', duration:'5 мин', desc:'Разминаем все пальчики с весёлым стишком',
+    steps:['Рубим ребром ладони: «та-та-та»','Солим — щепоточкой пальчиков','Мнём обеими руками','Отжимаем крепко кулачками','Повторить 2–3 раза в разном темпе'] },
+  { id:'w2', name:'Дыхание «Шарик»', duration:'3 мин', desc:'Надуваем живот как шарик — диафрагмальное дыхание',
+    steps:['Кладём руку на живот','Вдох носом — живот надувается','Выдох ртом — живот сдувается','Повторить 6–8 раз медленно и спокойно'] },
+  { id:'w3', name:'Растяжка сидя', duration:'5 мин', desc:'Мягкая растяжка без нагрузки на суставы',
+    steps:['Сесть на пол, ноги вперёд','Тянемся руками к носочкам — без спешки','Повороты корпуса вправо-влево','Наклоны головы — ухо к плечу','Каждое движение по 5 раз'] },
+  { id:'w4', name:'Глазная гимнастика', duration:'3 мин', desc:'Упражнения для глазок — снимаем напряжение',
+    steps:['Закрыть глаза, считаем до 5','Смотрим вверх-вниз 5 раз','Смотрим влево-вправо 5 раз','Рисуем глазами круг по часовой стрелке','Быстро моргаем 10 раз'] },
+  { id:'w5', name:'Угадай эмоцию', duration:'5 мин', desc:'По очереди показываем и угадываем эмоции',
+    steps:['Называем эмоцию — другой показывает лицом','Радость, грусть, удивление, испуг, злость','Угадываем что показывает другой','Когда мы так себя чувствуем?','Заканчиваем радостной эмоцией'] },
+  { id:'w6', name:'Пальчики «Семья»', duration:'5 мин', desc:'Классическая пальчиковая игра про семью',
+    steps:['Этот пальчик — дедушка 👴','Этот пальчик — бабушка 👵','Этот пальчик — папочка 👨','Этот пальчик — мамочка 👩','Этот пальчик — я! Вот и вся моя семья! 🤲','Повторить 3 раза меняя темп'] },
+];
+
+const ACTIVITIES = {
+  reading: [
+    { id:'r1', name:'Буква дня', duration:'15 мин', desc:'Знакомимся с одной буквой — смотрим, слышим, пишем, ищем',
+      steps:['Показываем букву на карточке или в книге','Называем вместе 4–5 слов которые начинаются на эту букву','Ищем букву вокруг — в надписях, упаковках, книгах','Рисуем букву пальцем в воздухе и на столе','Пишем букву в тетради — сначала по образцу, потом сами'] },
+    { id:'r2', name:'Слоги по карточкам', duration:'15 мин', desc:'Читаем простые слоги: МА, ПА, СА, ЛА, ТА...',
+      steps:['Берём карточки с открытыми слогами','Читаем вместе вслух 5–7 слогов','Ребёнок повторяет каждый слог самостоятельно','Показываем картинку — называем с какого слога начинается','Хвалим за каждый ответ независимо от скорости'] },
+    { id:'r3', name:'История по картинкам', duration:'20 мин', desc:'Рассматриваем книгу и придумываем историю вместе',
+      steps:['Берём книгу с яркими иллюстрациями','Рассматриваем каждую страницу не торопясь','Кто это? Что делает? Что чувствует?','Ребёнок рассказывает своими словами что видит','Вместе придумываем что будет дальше'] },
+    { id:'r4', name:'Звуковая игра', duration:'15 мин', desc:'Тренируем фонематический слух',
+      steps:['Сидим тихо и слушаем — называем все звуки вокруг','«Первый звук»: называем слово — ребёнок называет первый звук','Хлопаем если слышим заданный звук в слове','Называем 10–12 слов — ребёнок хлопает на нужный звук','Меняемся: ребёнок загадывает звук — мы угадываем'] },
+  ],
+  motorics: [
+    { id:'m1', name:'Шнуровка', duration:'15 мин', desc:'Шнуруем и завязываем — тренируем ловкость и терпение',
+      steps:['Берём шнуровку или ботинок с длинным шнурком','Продеваем шнурок через дырочки последовательно','Учимся завязывать простой узел','Пробуем завязать бантик (петля + петля)','Не торопим — хвалим за старание, а не за скорость'] },
+    { id:'m2', name:'Нанизывание бусин', duration:'15 мин', desc:'Нанизываем крупные бусины на шнурок',
+      steps:['Берём крупные деревянные бусины разных цветов','Нанизываем по одной — шнурок с узелком на конце','Чередуем цвета — красная-синяя-красная...','Считаем сколько всего бусин нанизали','Усложнение: узор из трёх цветов'] },
+    { id:'m3', name:'Ножницы и бумага', duration:'15 мин', desc:'Вырезаем по нарисованным линиям',
+      steps:['Берём детские безопасные ножницы','Рисуем на бумаге жирные прямые линии','Режем по прямой — медленно и аккуратно','Потом режем по волнистой линии','Вырезаем простые фигуры: полоса, квадрат, треугольник'] },
+    { id:'m4', name:'Рисование по точкам', duration:'15 мин', desc:'Соединяем точки карандашом — точность и концентрация',
+      steps:['Находим или рисуем лист с пронумерованными точками','Соединяем точки по порядку от 1 до конца','Называем что получилось','Раскрашиваем аккуратно не выходя за контур','Усложнение: точки от 1 до 20'] },
+  ],
+  sculpting: [
+    { id:'s1', name:'Животное из пластилина', duration:'20 мин', desc:'Лепим любимое животное — творчество и моторика',
+      steps:['Ребёнок выбирает какое животное лепить','Разминаем пластилин в ладонях','Лепим основные части: туловище, голова','Добавляем детали: лапы, уши, хвост, глаза','Придумываем имя и историю про животное'] },
+    { id:'s2', name:'Овощи и фрукты', duration:'20 мин', desc:'Лепим разные овощи — формы, цвета, названия',
+      steps:['Обсуждаем что лепим и какой он формы','Выбираем нужный цвет пластилина','Лепим 3–4 разных овоща или фрукта','Делаем «магазин» или «огород»','Играем в магазин: покупаем и продаём что слепили'] },
+    { id:'s3', name:'Отпечатки в тесте', duration:'25 мин', desc:'Делаем отпечатки руки и предметов в солёном тесте',
+      steps:['Замешиваем тесто: стакан муки + полстакана соли + вода','Раскатываем в лепёшку толщиной 1 см','Прикладываем руку и делаем чёткий отпечаток','Добавляем отпечатки монетки, листика, ракушки','Оставляем сохнуть, потом раскрашиваем'] },
+    { id:'s4', name:'Буквы из пластилина', duration:'15 мин', desc:'Лепим буквы — тактильно закрепляем алфавит',
+      steps:['Выбираем 2–3 буквы которые уже знаем','Раскатываем «колбаску» из пластилина','Выгибаем колбаску в форму буквы','Трогаем пальчиком контур и называем букву','Можно слепить все буквы своего имени'] },
+  ],
+  movement: [
+    { id:'mv1', name:'Детская йога — 5 поз', duration:'15 мин', desc:'Мягкие позы без нагрузки на тазобедренные суставы',
+      steps:['Кошка: на четвереньках — прогибаем спину вверх-вниз','Бабочка: сидя, стопы вместе — мягко двигаем коленями (без давления)','Дерево: стоим на одной ноге, рукой держимся за стену','Звезда: ноги широко, руки в стороны — держим 10 сек','Каждую позу держим 5–10 секунд, дышим спокойно'] },
+    { id:'mv2', name:'Море волнуется', duration:'15 мин', desc:'Подвижная игра на внимание и воображение',
+      steps:['Ведущий считает: «Море волнуется раз, два, три...»','«Морская фигура — замри!»','Замираем в позе любого морского существа','Называем кого изображаем — другой угадывает','Меняемся ведущими, повторяем 5–7 раз'] },
+    { id:'mv3', name:'Танец под музыку', duration:'15 мин', desc:'Свободный танец под любимые песни',
+      steps:['Включаем любимые песни ребёнка','Танцуем вместе — двигаемся как хочется','Родитель показывает движение — ребёнок повторяет','Ребёнок показывает движение — родитель повторяет','Заканчиваем медленной спокойной песней'] },
+    { id:'mv4', name:'Полоса препятствий', duration:'20 мин', desc:'Домашний курс из подушек, стульев и игрушек',
+      steps:['Раскладываем подушки на полу — перешагиваем','Проползаем под стулом или столом','Обходим игрушки змейкой','Прыгаем с подушки на подушку (невысоко от пола)','Проходим курс 3–5 раз — считаем время'] },
+  ],
+  emotions: [
+    { id:'e1', name:'Карточки эмоций', duration:'15 мин', desc:'Угадываем и изображаем эмоции',
+      steps:['Раскладываем карточки с изображениями лиц','Ребёнок угадывает какая эмоция на карточке','Мы изображаем эмоцию — ребёнок угадывает','Когда ты так себя чувствуешь?','Что делать когда грустно? Когда злишься?'] },
+    { id:'e2', name:'Ролевая игра', duration:'20 мин', desc:'Разыгрываем сценку с игрушками',
+      steps:['Выбираем игрушки — персонажи игры','Придумываем ситуацию: в магазине, у врача, в гостях','Разыгрываем сценку — оба участвуем','Как себя чувствовали персонажи?','Придумываем новую ситуацию и меняем роли'] },
+    { id:'e3', name:'Рисуем настроение', duration:'20 мин', desc:'Рисуем как себя чувствуем прямо сейчас',
+      steps:['Как ты сейчас себя чувствуешь?','Какого цвета твоё настроение? Какой формы?','Рисуем — цвет, линии, формы — как хочется','Рассказываем что нарисовали и почему','Родитель тоже рисует своё настроение и показывает'] },
+    { id:'e4', name:'История про чувства', duration:'20 мин', desc:'Читаем или придумываем историю про эмоции',
+      steps:['Берём книгу или придумываем историю вместе','Как сейчас себя чувствует герой?','Почему он так себя чувствует?','Ты когда-нибудь чувствовал то же самое?','Что можно сделать чтобы герою стало лучше?'] },
+  ],
+  logic: [
+    { id:'l1', name:'Сортировка', duration:'15 мин', desc:'Сортируем предметы по цвету, форме, размеру',
+      steps:['Собираем разные предметы: пуговицы, кубики, крышки','Сортируем по цвету — раскладываем в разные кучки','Пересортируем по форме','По размеру: большой — средний — маленький','Усложнение: сортировка по двум признакам одновременно'] },
+    { id:'l2', name:'Что лишнее?', duration:'15 мин', desc:'Находим предмет который не подходит к остальным',
+      steps:['Раскладываем 4 карточки или предмета','Три из одной группы, один — не подходит','Ребёнок называет что лишнее и объясняет почему','Начинаем с очевидного — постепенно усложняем','Ребёнок сам придумывает загадку «что лишнее?» для нас'] },
+    { id:'l3', name:'Паттерны из кубиков', duration:'15 мин', desc:'Продолжаем ряд по заданному узору',
+      steps:['Выкладываем начало узора: красный-синий-красный...','Ребёнок продолжает ряд самостоятельно','Усложняем: три цвета или форма+цвет','Ребёнок сам придумывает узор — мы продолжаем','Считаем сколько всего элементов в ряду'] },
+    { id:'l4', name:'Пазл вместе', duration:'20 мин', desc:'Собираем пазл из 24–40 деталей вдвоём',
+      steps:['Выбираем пазл по возрасту (24–40 деталей)','Находим все угловые и крайние детали','Ищем детали по цвету или части картинки','Работаем вместе — направляем, но не делаем за ребёнка','Хвалим за каждую вставленную деталь'] },
+  ],
+};
+
+// ── Данные: упражнения на осанку ─────────────────────────────────────────────
+
+const POSTURE_EXERCISES = [
+  { id:'p1', name:'Стена за спиной', duration:'2 мин', emoji:'🧱',
+    desc:'Учимся чувствовать правильное положение тела',
+    steps:['Встать спиной к стене','Прижать затылок, лопатки, ягодицы, пятки','Запомнить это ощущение — это правильная осанка','Сделать шаг вперёд, сохраняя позицию','Повторить 3 раза, держать 20–30 секунд'] },
+  { id:'p2', name:'Плавание на суше', duration:'5 мин', emoji:'🏊',
+    desc:'Укрепляем мышцы спины лёжа на животе',
+    steps:['Лечь на живот, руки вытянуть вперёд','Одновременно поднять правую руку и левую ногу','Задержать 3 секунды, опустить','Поднять левую руку и правую ногу','Повторить по 8 раз на каждую сторону'] },
+  { id:'p3', name:'Кошка-корова', duration:'3 мин', emoji:'🐱',
+    desc:'Мобилизация позвоночника — любимое упражнение',
+    steps:['Встать на четвереньки — колени под бёдрами, запястья под плечами','Вдох: прогнуть спину вниз, поднять голову (корова)','Выдох: выгнуть спину вверх, голову вниз (кошка)','Двигаться медленно и плавно','Повторить 10 раз'] },
+  { id:'p4', name:'Лодочка', duration:'3 мин', emoji:'⛵',
+    desc:'Укрепляем разгибатели спины',
+    steps:['Лечь на живот, руки вдоль тела','Одновременно поднять голову, грудь и ноги от пола','Задержать 3–5 секунд','Медленно опустить','Повторить 6–8 раз, между подходами отдых 10 сек'] },
+  { id:'p5', name:'Мостик', duration:'3 мин', emoji:'🌉',
+    desc:'Укрепляем ягодицы и поясницу мягко',
+    steps:['Лечь на спину, колени согнуты, стопы на полу','Медленно поднять таз вверх — тело прямое','Задержать 5 секунд','Медленно опустить позвонок за позвонком','Повторить 8–10 раз'] },
+  { id:'p6', name:'Книга на голове', duration:'5 мин', emoji:'📚',
+    desc:'Игровой способ отработать осанку при ходьбе',
+    steps:['Положить на голову лёгкую книгу или мягкую игрушку','Ходить по комнате не уронив','Усложнение: ходить по линии (полоска скотча)','Ещё сложнее: поднять руки в стороны','Считаем сколько шагов до падения — бьём рекорд'] },
+  { id:'p7', name:'Ангел на полу', duration:'3 мин', emoji:'👼',
+    desc:'Растяжка грудного отдела и мобилизация плеч',
+    steps:['Лечь на спину, руки вдоль тела','Медленно поднять руки вверх — как ангел рисует крылья','Руки скользят по полу до положения над головой','Вернуть обратно так же медленно','Повторить 8 раз, дышим равномерно'] },
+  { id:'p8', name:'Superman', duration:'3 мин', emoji:'🦸',
+    desc:'Укрепляем всю заднюю цепочку мышц',
+    steps:['Лечь на живот, руки вытянуть вперёд','Поднять одновременно обе руки и обе ноги','Представляем что летим как супергерой','Задержать 3–5 секунд','Повторить 6 раз, между подходами отдыхаем'] },
+];
+
+// ── IndexedDB для фото ────────────────────────────────────────────────────────
+
+const DB_NAME = 'letny-lager';
+const DB_VERSION = 1;
+const STORE = 'posture-photos';
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = (e) => {
+      e.target.result.createObjectStore(STORE, { keyPath: 'id', autoIncrement: true });
+    };
+    req.onsuccess = (e) => resolve(e.target.result);
+    req.onerror = (e) => reject(e.target.error);
+  });
+}
+
+async function dbAddPhoto(photo) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    const req = tx.objectStore(STORE).add(photo);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = (e) => reject(e.target.error);
+  });
+}
+
+async function dbGetPhotos() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readonly');
+    const req = tx.objectStore(STORE).getAll();
+    req.onsuccess = () => resolve(req.result.reverse());
+    req.onerror = (e) => reject(e.target.error);
+  });
+}
+
+async function dbDeletePhoto(id) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    const req = tx.objectStore(STORE).delete(id);
+    req.onsuccess = () => resolve();
+    req.onerror = (e) => reject(e.target.error);
+  });
+}
+
+// ── Утилиты ──────────────────────────────────────────────────────────────────
+
+const STORAGE_KEY = 'летний-лагерь-v1';
+const dateKey = (d) => d.toISOString().slice(0, 10);
+const todayDate = () => new Date();
+
+const getTodayBlock = () => {
+  const blockId = WEEK_SCHEDULE[todayDate().getDay()];
+  return blockId ? BLOCKS.find(b => b.id === blockId) : null;
+};
+
+const getDayOfYear = () => {
+  const now = todayDate();
+  return Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 86400000);
+};
+
+const getTodayWarmup = () => WARMUPS[getDayOfYear() % WARMUPS.length];
+const getDefaultActivity = (blockId) => ACTIVITIES[blockId][getDayOfYear() % ACTIVITIES[blockId].length];
+
+const formatDate = (dateStr) => {
+  const d = new Date(dateStr + 'T12:00:00');
+  return d.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
+};
+
+const loadProgress = () => {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
+  catch { return {}; }
+};
+
+const RESULTS = [
+  { id:'great', label:'Отлично', emoji:'🌟' },
+  { id:'ok',    label:'Хорошо',  emoji:'😊' },
+  { id:'hard',  label:'Сложно',  emoji:'😤' },
+];
+
+// ── Компоненты: занятия ───────────────────────────────────────────────────────
+
+function Steps({ steps }) {
+  return (
+    <ol className="mt-3 space-y-1.5">
+      {steps.map((s, i) => (
+        <li key={i} className="flex gap-2 text-sm text-gray-600">
+          <span className="flex-shrink-0 w-5 h-5 rounded-full bg-gray-100 text-gray-500 text-xs flex items-center justify-center font-semibold mt-0.5">{i+1}</span>
+          <span>{s}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function WarmupCard() {
+  const [open, setOpen] = useState(false);
+  const warmup = getTodayWarmup();
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 p-4">
+      <div className="flex items-start gap-3">
+        <span className="text-2xl mt-0.5">🌅</span>
+        <div className="flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="font-semibold text-gray-800">{warmup.name}</p>
+              <p className="text-xs text-gray-400 mt-0.5">{warmup.duration}</p>
+            </div>
+            <button onClick={() => setOpen(o => !o)} className="text-xs text-gray-400 hover:text-gray-600 underline flex-shrink-0 mt-1">
+              {open ? 'скрыть' : 'как делать'}
+            </button>
+          </div>
+          <p className="text-sm text-gray-500 mt-1">{warmup.desc}</p>
+          {open && <Steps steps={warmup.steps} />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ActivityCard({ activity, style, onSwap }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className={`rounded-2xl border p-4 ${style.bg} ${style.border}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className={`font-semibold text-base ${style.text}`}>{activity.name}</p>
+          <p className="text-xs text-gray-400 mt-0.5">{activity.duration}</p>
+        </div>
+        <button onClick={() => setOpen(o => !o)} className="text-xs text-gray-400 hover:text-gray-600 underline flex-shrink-0 mt-1">
+          {open ? 'скрыть' : 'как делать'}
+        </button>
+      </div>
+      <p className="text-sm text-gray-600 mt-1">{activity.desc}</p>
+      {open && <Steps steps={activity.steps} />}
+      <button onClick={onSwap} className="mt-3 w-full py-2 rounded-xl border border-gray-300 bg-white text-gray-600 text-sm font-medium hover:bg-gray-50 transition-colors">
+        Заменить активность →
+      </button>
+    </div>
+  );
+}
+
+function SwapPanel({ blockId, currentId, style, onSelect, onClose }) {
+  const alts = ACTIVITIES[blockId].filter(a => a.id !== currentId);
+  return (
+    <div className="fade-in">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-sm font-medium text-gray-600">Выберите другую активность:</p>
+        <button onClick={onClose} className="text-xs text-gray-400 hover:text-gray-600 underline">отмена</button>
+      </div>
+      <div className="space-y-2">
+        {alts.map(a => (
+          <button key={a.id} onClick={() => onSelect(a)}
+            className={`w-full text-left rounded-xl border p-3 ${style.bg} ${style.border} hover:opacity-75 transition-opacity`}>
+            <p className={`font-semibold text-sm ${style.text}`}>{a.name}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{a.duration} — {a.desc}</p>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TodayView({ progress, onSave }) {
+  const block = getTodayBlock();
+  const key = dateKey(todayDate());
+  const entry = progress[key];
+  const [activity, setActivity] = useState(() => block ? getDefaultActivity(block.id) : null);
+  const [showSwap, setShowSwap] = useState(false);
+  const [phase, setPhase] = useState(entry ? 'done' : 'plan');
+  const [result, setResult] = useState('');
+  const [comment, setComment] = useState('');
+
+  if (!block) {
+    return (
+      <div className="text-center py-20">
+        <p className="text-6xl mb-4">☀️</p>
+        <p className="text-xl font-bold text-gray-700">Сегодня выходной!</p>
+        <p className="text-gray-400 mt-2 text-sm">Занятия — с понедельника по субботу</p>
+      </div>
+    );
+  }
+
+  const style = S[block.id];
+
+  if (phase === 'done') {
+    const saved = entry || {};
+    const act = ACTIVITIES[block.id].find(a => a.id === saved.activityId) || activity;
+    const res = RESULTS.find(r => r.id === saved.result);
+    return (
+      <div className="fade-in space-y-4">
+        <div className="bg-green-50 border border-green-200 rounded-2xl p-5 text-center">
+          <p className="text-4xl mb-2">✅</p>
+          <p className="text-lg font-bold text-green-800">Занятие проведено!</p>
+          {res && <p className="text-gray-500 mt-1 text-lg">{res.emoji} {res.label}</p>}
+          {saved.comment && <p className="text-gray-500 mt-2 text-sm italic">«{saved.comment}»</p>}
+        </div>
+        <div className={`rounded-2xl border p-4 ${style.bg} ${style.border}`}>
+          <p className={`text-xs font-semibold uppercase tracking-wide ${style.text} mb-1`}>{block.emoji} {block.name}</p>
+          <p className="font-semibold text-gray-800">{act ? act.name : '—'}</p>
+        </div>
+        <button onClick={() => { setPhase('plan'); setResult(''); setComment(''); }}
+          className="w-full py-2.5 rounded-xl border border-gray-300 bg-white text-gray-500 text-sm hover:bg-gray-50">
+          Редактировать запись
+        </button>
+      </div>
+    );
+  }
+
+  if (phase === 'finish') {
+    return (
+      <div className="fade-in space-y-4">
+        <div className="bg-white rounded-2xl border border-gray-200 p-5">
+          <p className="font-bold text-gray-800 text-lg mb-4">Как прошло занятие?</p>
+          <div className="grid grid-cols-3 gap-2 mb-4">
+            {RESULTS.map(r => (
+              <button key={r.id} onClick={() => setResult(r.id)}
+                className={`py-3 rounded-xl border-2 flex flex-col items-center gap-1 transition-all ${result === r.id ? 'border-gray-700 bg-gray-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                <span className="text-2xl">{r.emoji}</span>
+                <span className="text-xs text-gray-600 font-medium">{r.label}</span>
+              </button>
+            ))}
+          </div>
+          <textarea value={comment} onChange={e => setComment(e.target.value)}
+            placeholder="Комментарий (необязательно) — что заметили, что понравилось..."
+            className="w-full border border-gray-200 rounded-xl p-3 text-sm text-gray-700 resize-none focus:outline-none focus:border-gray-400"
+            rows={3} />
+        </div>
+        <button
+          onClick={() => {
+            if (!result) return;
+            onSave(key, { blockId: block.id, activityId: activity.id, warmupId: getTodayWarmup().id, result, comment, completed: true });
+            setPhase('done');
+          }}
+          disabled={!result}
+          className={`w-full py-4 rounded-2xl text-white font-bold text-base transition-colors ${result ? `${style.btn} cursor-pointer` : 'bg-gray-200 cursor-not-allowed text-gray-400'}`}>
+          Сохранить
+        </button>
+        <button onClick={() => setPhase('plan')} className="w-full py-2 text-gray-400 text-sm hover:text-gray-600">← Назад</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 fade-in">
+      <div className={`rounded-2xl p-4 border ${style.bg} ${style.border}`}>
+        <p className={`text-xs font-semibold uppercase tracking-wide ${style.text}`}>{block.emoji} Блок сегодня</p>
+        <p className="text-xl font-bold text-gray-800 mt-0.5">{block.name}</p>
+        <p className="text-sm text-gray-500">{block.desc}</p>
+      </div>
+      <div>
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Разминка</p>
+        <WarmupCard />
+      </div>
+      <div>
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Основное занятие</p>
+        {showSwap
+          ? <SwapPanel blockId={block.id} currentId={activity.id} style={style}
+              onSelect={a => { setActivity(a); setShowSwap(false); }}
+              onClose={() => setShowSwap(false)} />
+          : <ActivityCard activity={activity} style={style} onSwap={() => setShowSwap(true)} />
+        }
+      </div>
+      <button onClick={() => setPhase('finish')}
+        className={`w-full py-4 rounded-2xl text-white font-bold text-base ${style.btn} transition-colors`}>
+        Занятие проведено ✓
+      </button>
+    </div>
+  );
+}
+
+// ── Компоненты: осанка ────────────────────────────────────────────────────────
+
+function PostureExerciseCard({ ex }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 p-4">
+      <div className="flex items-start gap-3">
+        <span className="text-2xl mt-0.5">{ex.emoji}</span>
+        <div className="flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="font-semibold text-gray-800">{ex.name}</p>
+              <p className="text-xs text-gray-400 mt-0.5">{ex.duration}</p>
+            </div>
+            <button onClick={() => setOpen(o => !o)} className="text-xs text-gray-400 hover:text-gray-600 underline flex-shrink-0 mt-1">
+              {open ? 'скрыть' : 'как делать'}
+            </button>
+          </div>
+          <p className="text-sm text-gray-500 mt-1">{ex.desc}</p>
+          {open && <Steps steps={ex.steps} />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PhotoSection() {
+  const [photos, setPhotos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
+  const [note, setNote] = useState('');
+  const [view, setView] = useState('front');
+  const [preview, setPreview] = useState(null);
+  const [enlarged, setEnlarged] = useState(null);
+  const fileRef = useRef();
+
+  useEffect(() => {
+    dbGetPhotos().then(p => { setPhotos(p); setLoading(false); });
+  }, []);
+
+  const handleFile = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => setPreview(ev.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  const handleSave = async () => {
+    if (!preview) return;
+    const entry = {
+      date: dateKey(todayDate()),
+      view,
+      note,
+      dataUrl: preview,
+    };
+    const id = await dbAddPhoto(entry);
+    setPhotos(prev => [{ ...entry, id }, ...prev]);
+    setPreview(null);
+    setNote('');
+    setAdding(false);
+    fileRef.current.value = '';
+  };
+
+  const handleDelete = async (id) => {
+    await dbDeletePhoto(id);
+    setPhotos(prev => prev.filter(p => p.id !== id));
+  };
+
+  const VIEW_LABELS = { front: 'Спереди', side: 'Сбоку', back: 'Сзади' };
+
+  if (enlarged) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex flex-col" onClick={() => setEnlarged(null)}>
+        <div className="flex items-center justify-between p-4">
+          <div>
+            <p className="text-white font-medium">{formatDate(enlarged.date)}</p>
+            <p className="text-gray-400 text-sm">{VIEW_LABELS[enlarged.view]}{enlarged.note ? ` — ${enlarged.note}` : ''}</p>
+          </div>
+          <button className="text-white text-2xl" onClick={() => setEnlarged(null)}>✕</button>
+        </div>
+        <div className="flex-1 flex items-center justify-center p-4">
+          <img src={enlarged.dataUrl} alt="" className="max-w-full max-h-full object-contain rounded-xl" onClick={e => e.stopPropagation()} />
+        </div>
+        <div className="p-4 flex justify-center">
+          <button
+            onClick={(e) => { e.stopPropagation(); if (confirm('Удалить фото?')) { handleDelete(enlarged.id); setEnlarged(null); } }}
+            className="px-6 py-2 rounded-xl bg-red-500 text-white text-sm font-medium">
+            Удалить
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile} />
+
+      {adding ? (
+        <div className="bg-white rounded-2xl border border-gray-200 p-4 fade-in space-y-3">
+          <p className="font-semibold text-gray-800">Новое фото осанки</p>
+          {preview ? (
+            <div className="relative">
+              <img src={preview} alt="" className="w-full rounded-xl object-cover max-h-72" />
+              <button onClick={() => { setPreview(null); fileRef.current.value = ''; }}
+                className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black bg-opacity-50 text-white text-sm flex items-center justify-center">✕</button>
+            </div>
+          ) : (
+            <button onClick={() => fileRef.current.click()}
+              className="w-full py-10 rounded-xl border-2 border-dashed border-gray-300 text-gray-400 text-sm hover:border-gray-400 hover:text-gray-500">
+              📷 Нажмите чтобы сделать фото
+            </button>
+          )}
+          <div className="flex gap-2">
+            {Object.entries(VIEW_LABELS).map(([k, label]) => (
+              <button key={k} onClick={() => setView(k)}
+                className={`flex-1 py-2 rounded-xl text-sm font-medium border-2 transition-all ${view === k ? 'border-gray-700 bg-gray-50 text-gray-800' : 'border-gray-200 text-gray-400'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <input value={note} onChange={e => setNote(e.target.value)}
+            placeholder="Заметка (необязательно)"
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400" />
+          <div className="flex gap-2">
+            <button onClick={() => { setAdding(false); setPreview(null); setNote(''); fileRef.current.value = ''; }}
+              className="flex-1 py-2.5 rounded-xl border border-gray-300 text-gray-500 text-sm">Отмена</button>
+            <button onClick={handleSave} disabled={!preview}
+              className={`flex-1 py-2.5 rounded-xl text-white text-sm font-semibold ${preview ? 'bg-teal-500 hover:bg-teal-600' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
+              Сохранить
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setAdding(true)}
+          className="w-full py-3.5 rounded-2xl bg-teal-500 hover:bg-teal-600 text-white font-semibold text-sm transition-colors">
+          📷 Добавить фото осанки
+        </button>
+      )}
+
+      {loading && <p className="text-center text-gray-400 text-sm py-8">Загрузка...</p>}
+
+      {!loading && photos.length === 0 && !adding && (
+        <div className="text-center py-12">
+          <p className="text-4xl mb-3">📷</p>
+          <p className="text-gray-500 font-medium">Нет фото</p>
+          <p className="text-gray-400 text-sm mt-1">Сфотографируйте осанку первый раз</p>
+        </div>
+      )}
+
+      {photos.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">История фото</p>
+          <div className="photo-grid">
+            {photos.map(p => (
+              <button key={p.id} onClick={() => setEnlarged(p)} className="text-left">
+                <img src={p.dataUrl} alt="" className="photo-thumb" />
+                <p className="text-xs text-gray-500 mt-1 truncate">{formatDate(p.date)}</p>
+                <p className="text-xs text-gray-400">{VIEW_LABELS[p.view]}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PostureView() {
+  const [tab, setTab] = useState('exercises');
+  return (
+    <div className="space-y-4 fade-in">
+      <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
+        {[['exercises','Упражнения'],['photos','Фото']].map(([v,label]) => (
+          <button key={v} onClick={() => setTab(v)}
+            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-colors ${tab===v ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'exercises' && (
+        <div className="space-y-3">
+          <div className="bg-teal-50 border border-teal-200 rounded-2xl p-3">
+            <p className="text-sm text-teal-700">Упражнения без нагрузки на тазобедренные суставы. Делать через день или ежедневно по желанию.</p>
+          </div>
+          {POSTURE_EXERCISES.map(ex => <PostureExerciseCard key={ex.id} ex={ex} />)}
+        </div>
+      )}
+
+      {tab === 'photos' && <PhotoSection />}
+    </div>
+  );
+}
+
+// ── Прогресс ──────────────────────────────────────────────────────────────────
+
+function ProgressView({ progress }) {
+  const entries = Object.entries(progress).sort(([a],[b]) => b.localeCompare(a));
+
+  if (entries.length === 0) {
+    return (
+      <div className="text-center py-20">
+        <p className="text-5xl mb-4">📊</p>
+        <p className="text-lg font-bold text-gray-600">Пока нет записей</p>
+        <p className="text-gray-400 mt-1 text-sm">Проведите первое занятие и отметьте результат</p>
+      </div>
+    );
+  }
+
+  const streak = (() => {
+    let count = 0;
+    const d = new Date();
+    for (let i = 0; i < 365; i++) {
+      if (progress[dateKey(d)]) { count++; d.setDate(d.getDate()-1); }
+      else break;
+    }
+    return count;
+  })();
+
+  const blockCounts = {};
+  entries.forEach(([,e]) => { blockCounts[e.blockId] = (blockCounts[e.blockId]||0)+1; });
+  const maxCount = Math.max(...Object.values(blockCounts), 1);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-white rounded-2xl border border-gray-200 p-4 text-center">
+          <p className="text-3xl font-bold text-gray-800">{entries.length}</p>
+          <p className="text-xs text-gray-400 mt-0.5">всего занятий</p>
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-200 p-4 text-center">
+          <p className="text-3xl font-bold text-gray-800">{streak}</p>
+          <p className="text-xs text-gray-400 mt-0.5">дней подряд</p>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-200 p-4">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Блоки</p>
+        <div className="space-y-2.5">
+          {BLOCKS.map(b => {
+            const count = blockCounts[b.id] || 0;
+            const style = S[b.id];
+            return (
+              <div key={b.id} className="flex items-center gap-2">
+                <span className="w-5 text-center text-sm">{b.emoji}</span>
+                <span className="text-sm text-gray-600 w-20 flex-shrink-0">{b.name}</span>
+                <div className="flex-1 bg-gray-100 rounded-full h-2">
+                  <div className={`h-2 rounded-full ${style.bar} transition-all`} style={{width:`${(count/maxCount)*100}%`}} />
+                </div>
+                <span className="text-xs text-gray-400 w-4 text-right">{count}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        {entries.map(([dateStr, entry]) => {
+          const block = BLOCKS.find(b => b.id === entry.blockId);
+          const act = block ? ACTIVITIES[block.id].find(a => a.id === entry.activityId) : null;
+          const res = RESULTS.find(r => r.id === entry.result);
+          const style = block ? S[block.id] : {};
+          return (
+            <div key={dateStr} className="bg-white rounded-2xl border border-gray-200 p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-xs text-gray-400 capitalize">{formatDate(dateStr)}</p>
+                  <p className="font-semibold text-gray-800 mt-0.5">{act ? act.name : entry.activityId}</p>
+                  {entry.comment && <p className="text-sm text-gray-500 mt-1 italic">«{entry.comment}»</p>}
+                </div>
+                <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                  {res && <span className="text-xl">{res.emoji}</span>}
+                  {block && <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${style.tag}`}>{block.emoji} {block.name}</span>}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
+
+function App() {
+  const [view, setView] = useState('today');
+  const [progress, setProgress] = useState(loadProgress);
+
+  const handleSave = useCallback((key, entry) => {
+    setProgress(prev => {
+      const next = { ...prev, [key]: entry };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  const todayStr = todayDate().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
+  const todayDone = !!progress[dateKey(todayDate())];
+
+  return (
+    <div className="max-w-md mx-auto min-h-screen flex flex-col">
+      <header className="sticky top-0 bg-amber-50 z-10 px-4 pt-6 pb-3 border-b border-amber-100">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h1 className="text-xl font-bold text-gray-800">Летний лагерь ☀️</h1>
+            <p className="text-xs text-gray-400 capitalize mt-0.5">{todayStr}</p>
+          </div>
+          {todayDone && <span className="text-green-500 text-sm font-medium">✓ готово</span>}
+        </div>
+        <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
+          {[['today','Сегодня'],['posture','Осанка'],['progress','Прогресс']].map(([v,label]) => (
+            <button key={v} onClick={() => setView(v)}
+              className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-colors ${view===v ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </header>
+
+      <main className="flex-1 px-4 pt-4 pb-10">
+        {view === 'today' && <TodayView progress={progress} onSave={handleSave} />}
+        {view === 'posture' && <PostureView />}
+        {view === 'progress' && <ProgressView progress={progress} />}
+      </main>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
