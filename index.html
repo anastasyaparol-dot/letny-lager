@@ -399,6 +399,17 @@ const RESULTS = [
   { id:'hard',  label:'Сложно',  emoji:'😤' },
 ];
 
+// ── Константы прогресса ───────────────────────────────────────────────────────
+
+const MONTH_NAMES = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+const DAY_NAMES_SHORT = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+
+const EXTRAS = [
+  { id:'posture', label:'Осанка',       emoji:'🧱', dot:'bg-teal-500'   },
+  { id:'moro',    label:'Рефлекс Мора', emoji:'🌀', dot:'bg-indigo-500' },
+  { id:'agility', label:'Ловкость',     emoji:'🟠', dot:'bg-orange-500' },
+];
+
 // ── Компоненты: занятия ───────────────────────────────────────────────────────
 
 function Steps({ steps }) {
@@ -892,89 +903,206 @@ function PostureView() {
 
 // ── Прогресс ──────────────────────────────────────────────────────────────────
 
-function ProgressView({ progress }) {
-  const entries = Object.entries(progress).sort(([a],[b]) => b.localeCompare(a));
+function MonthCalendar({ progress, selected, onSelect }) {
+  const [anchor, setAnchor] = useState(() => {
+    const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
 
-  if (entries.length === 0) {
-    return (
-      <div className="text-center py-20">
-        <p className="text-5xl mb-4">📊</p>
-        <p className="text-lg font-bold text-gray-600">Пока нет записей</p>
-        <p className="text-gray-400 mt-1 text-sm">Проведите первое занятие и отметьте результат</p>
+  const year = anchor.getFullYear();
+  const month = anchor.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDow = (() => { const d = new Date(year, month, 1).getDay(); return d === 0 ? 6 : d - 1; })();
+  const todayKey = dateKey(new Date());
+
+  const cells = [];
+  for (let i = 0; i < firstDow; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const dayKey = (d) => {
+    const dd = String(d).padStart(2,'0');
+    const mm = String(month + 1).padStart(2,'0');
+    return `${year}-${mm}-${dd}`;
+  };
+
+  const getDots = (d) => {
+    if (!d) return [];
+    const e = progress[dayKey(d)];
+    if (!e) return [];
+    const dots = [];
+    if (e.completed) dots.push('lesson');
+    if (e.extras?.posture) dots.push('posture');
+    if (e.extras?.moro) dots.push('moro');
+    if (e.extras?.agility) dots.push('agility');
+    return dots;
+  };
+
+  const dotColor = { lesson:'bg-blue-500', posture:'bg-teal-500', moro:'bg-indigo-500', agility:'bg-orange-500' };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <button onClick={() => setAnchor(new Date(year, month-1, 1))}
+          className="w-8 h-8 rounded-xl hover:bg-gray-100 flex items-center justify-center text-gray-500 text-lg">‹</button>
+        <p className="font-semibold text-gray-800">{MONTH_NAMES[month]} {year}</p>
+        <button onClick={() => setAnchor(new Date(year, month+1, 1))}
+          className="w-8 h-8 rounded-xl hover:bg-gray-100 flex items-center justify-center text-gray-500 text-lg">›</button>
       </div>
-    );
-  }
+      <div className="grid grid-cols-7 mb-1">
+        {DAY_NAMES_SHORT.map(n => <p key={n} className="text-center text-xs text-gray-400 font-medium py-1">{n}</p>)}
+      </div>
+      <div className="grid grid-cols-7 gap-y-1">
+        {cells.map((d, i) => {
+          if (!d) return <div key={i} />;
+          const k = dayKey(d);
+          const dots = getDots(d);
+          const isToday = k === todayKey;
+          const isSel = k === selected;
+          return (
+            <button key={i} onClick={() => onSelect(k)}
+              className={`flex flex-col items-center justify-center py-1 rounded-xl transition-all min-h-[44px]
+                ${isSel ? 'bg-gray-800' : isToday ? 'bg-amber-100' : 'hover:bg-gray-100'}`}>
+              <span className={`text-sm font-medium leading-none
+                ${isSel ? 'text-white' : isToday ? 'text-amber-800' : 'text-gray-700'}`}>{d}</span>
+              <div className="flex gap-0.5 mt-1 h-2 items-center">
+                {dots.slice(0,4).map((dot,j) => (
+                  <span key={j} className={`w-1.5 h-1.5 rounded-full ${dotColor[dot]}`} />
+                ))}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function DayPanel({ dayKey, progress, onSave }) {
+  const entry = progress[dayKey] || {};
+  const extras = entry.extras || {};
+  const block = entry.blockId ? BLOCKS.find(b => b.id === entry.blockId) : null;
+  const act = block ? ACTIVITIES[block.id]?.find(a => a.id === entry.activityId) : null;
+  const res = RESULTS.find(r => r.id === entry.result);
+  const style = block ? S[block.id] : null;
+
+  const d = new Date(dayKey + 'T12:00:00');
+  const dateStr = d.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
+  const isFuture = dayKey > dateKey(new Date());
+
+  const toggleExtra = (id) => {
+    onSave(dayKey, { ...entry, extras: { ...extras, [id]: !extras[id] } });
+  };
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 p-4 space-y-2 fade-in">
+      <p className="font-semibold text-gray-700 capitalize text-sm mb-3">{dateStr}</p>
+
+      {/* Основное занятие */}
+      <div className={`flex items-center gap-3 p-3 rounded-xl ${entry.completed ? 'bg-blue-50 border border-blue-100' : 'bg-gray-50'}`}>
+        <span className="text-lg flex-shrink-0">{entry.completed ? '✅' : '⬜'}</span>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-gray-700">Основное занятие</p>
+          {block
+            ? <p className="text-xs text-gray-400 mt-0.5">{block.emoji} {block.name}{act ? ` · ${act.name}` : ''}{res ? ` · ${res.emoji}` : ''}</p>
+            : <p className="text-xs text-gray-400 mt-0.5">{isFuture ? 'Ещё не наступило' : 'Не отмечено'}</p>
+          }
+          {entry.comment && <p className="text-xs text-gray-400 mt-0.5 italic">«{entry.comment}»</p>}
+        </div>
+      </div>
+
+      {/* Дополнительные активности */}
+      {EXTRAS.map(ex => (
+        <button key={ex.id} onClick={() => !isFuture && toggleExtra(ex.id)} disabled={isFuture}
+          className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors text-left border
+            ${extras[ex.id] ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-100'}
+            ${isFuture ? 'opacity-40 cursor-not-allowed' : 'hover:bg-gray-100 cursor-pointer'}`}>
+          <span className="text-lg flex-shrink-0">{extras[ex.id] ? '✅' : '⬜'}</span>
+          <p className="text-sm font-semibold text-gray-700">{ex.emoji} {ex.label}</p>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ProgressView({ progress, onSave }) {
+  const [selected, setSelected] = useState(dateKey(new Date()));
+
+  const allEntries = Object.entries(progress);
+  const lessonsCount = allEntries.filter(([,e]) => e.completed).length;
+
+  const totalActivities = allEntries.reduce((sum, [,e]) => {
+    let n = e.completed ? 1 : 0;
+    if (e.extras?.posture) n++;
+    if (e.extras?.moro) n++;
+    if (e.extras?.agility) n++;
+    return sum + n;
+  }, 0);
 
   const streak = (() => {
-    let count = 0;
-    const d = new Date();
+    let count = 0; const d = new Date();
     for (let i = 0; i < 365; i++) {
-      if (progress[dateKey(d)]) { count++; d.setDate(d.getDate()-1); }
-      else break;
+      const e = progress[dateKey(d)];
+      const active = e && (e.completed || e.extras?.posture || e.extras?.moro || e.extras?.agility);
+      if (active) { count++; d.setDate(d.getDate()-1); } else break;
     }
     return count;
   })();
 
   const blockCounts = {};
-  entries.forEach(([,e]) => { blockCounts[e.blockId] = (blockCounts[e.blockId]||0)+1; });
+  allEntries.forEach(([,e]) => { if (e.blockId) blockCounts[e.blockId] = (blockCounts[e.blockId]||0)+1; });
   const maxCount = Math.max(...Object.values(blockCounts), 1);
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-white rounded-2xl border border-gray-200 p-4 text-center">
-          <p className="text-3xl font-bold text-gray-800">{entries.length}</p>
-          <p className="text-xs text-gray-400 mt-0.5">всего занятий</p>
-        </div>
-        <div className="bg-white rounded-2xl border border-gray-200 p-4 text-center">
-          <p className="text-3xl font-bold text-gray-800">{streak}</p>
-          <p className="text-xs text-gray-400 mt-0.5">дней подряд</p>
-        </div>
-      </div>
-
+      {/* Календарь */}
       <div className="bg-white rounded-2xl border border-gray-200 p-4">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Блоки</p>
-        <div className="space-y-2.5">
-          {BLOCKS.map(b => {
-            const count = blockCounts[b.id] || 0;
-            const style = S[b.id];
-            return (
-              <div key={b.id} className="flex items-center gap-2">
-                <span className="w-5 text-center text-sm">{b.emoji}</span>
-                <span className="text-sm text-gray-600 w-20 flex-shrink-0">{b.name}</span>
-                <div className="flex-1 bg-gray-100 rounded-full h-2">
-                  <div className={`h-2 rounded-full ${style.bar} transition-all`} style={{width:`${(count/maxCount)*100}%`}} />
-                </div>
-                <span className="text-xs text-gray-400 w-4 text-right">{count}</span>
-              </div>
-            );
-          })}
-        </div>
+        <MonthCalendar progress={progress} selected={selected} onSelect={setSelected} />
       </div>
 
-      <div className="space-y-2">
-        {entries.map(([dateStr, entry]) => {
-          const block = BLOCKS.find(b => b.id === entry.blockId);
-          const act = block ? ACTIVITIES[block.id].find(a => a.id === entry.activityId) : null;
-          const res = RESULTS.find(r => r.id === entry.result);
-          const style = block ? S[block.id] : {};
-          return (
-            <div key={dateStr} className="bg-white rounded-2xl border border-gray-200 p-4">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-xs text-gray-400 capitalize">{formatDate(dateStr)}</p>
-                  <p className="font-semibold text-gray-800 mt-0.5">{act ? act.name : entry.activityId}</p>
-                  {entry.comment && <p className="text-sm text-gray-500 mt-1 italic">«{entry.comment}»</p>}
-                </div>
-                <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                  {res && <span className="text-xl">{res.emoji}</span>}
-                  {block && <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${style.tag}`}>{block.emoji} {block.name}</span>}
-                </div>
-              </div>
-            </div>
-          );
-        })}
+      {/* Легенда */}
+      <div className="flex flex-wrap gap-x-4 gap-y-1 px-1">
+        {[['bg-blue-500','Занятие'],['bg-teal-500','Осанка'],['bg-indigo-500','Рефлекс Мора'],['bg-orange-500','Ловкость']].map(([color,label]) => (
+          <div key={label} className="flex items-center gap-1.5">
+            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${color}`} />
+            <span className="text-xs text-gray-400">{label}</span>
+          </div>
+        ))}
       </div>
+
+      {/* Выбранный день */}
+      <DayPanel dayKey={selected} progress={progress} onSave={onSave} />
+
+      {/* Статистика */}
+      <div className="grid grid-cols-3 gap-2">
+        {[[lessonsCount,'занятий'],[streak,'дней подряд'],[totalActivities,'активностей']].map(([n,label]) => (
+          <div key={label} className="bg-white rounded-2xl border border-gray-200 p-3 text-center">
+            <p className="text-2xl font-bold text-gray-800">{n}</p>
+            <p className="text-xs text-gray-400 mt-0.5 leading-tight">{label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* По блокам */}
+      {Object.keys(blockCounts).length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-4">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">По блокам</p>
+          <div className="space-y-2.5">
+            {BLOCKS.map(b => {
+              const count = blockCounts[b.id] || 0;
+              return (
+                <div key={b.id} className="flex items-center gap-2">
+                  <span className="w-5 text-center text-sm">{b.emoji}</span>
+                  <span className="text-sm text-gray-600 w-20 flex-shrink-0">{b.name}</span>
+                  <div className="flex-1 bg-gray-100 rounded-full h-2">
+                    <div className={`h-2 rounded-full ${S[b.id].bar} transition-all`} style={{width:`${(count/maxCount)*100}%`}} />
+                  </div>
+                  <span className="text-xs text-gray-400 w-4 text-right">{count}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1020,7 +1148,7 @@ function App() {
         {view === 'today' && <TodayView progress={progress} onSave={handleSave} />}
         {view === 'posture' && <PostureView />}
         {view === 'agility' && <AgilityView />}
-        {view === 'progress' && <ProgressView progress={progress} />}
+        {view === 'progress' && <ProgressView progress={progress} onSave={handleSave} />}
       </main>
     </div>
   );
