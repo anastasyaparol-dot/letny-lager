@@ -317,56 +317,55 @@ const POSTURE_EXERCISES = [
     steps:['Лечь на живот, руки вытянуть вперёд','Поднять одновременно обе руки и обе ноги','Представляем что летим как супергерой','Задержать 3–5 секунд','Повторить 6 раз, между подходами отдыхаем'] },
 ];
 
-// ── IndexedDB для фото ────────────────────────────────────────────────────────
+// ── API ───────────────────────────────────────────────────────────────────────
 
-const DB_NAME = 'letny-lager';
-const DB_VERSION = 1;
-const STORE = 'posture-photos';
+const api = {
+  async loadProgress() {
+    try { const r = await fetch('/api/progress'); return await r.json(); }
+    catch { return {}; }
+  },
+  async saveProgress(date, data) {
+    await fetch('/api/progress', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date, data }),
+    });
+  },
+  async loadPhotos() {
+    try { const r = await fetch('/api/photos'); return await r.json(); }
+    catch { return []; }
+  },
+  async savePhoto(photo) {
+    const r = await fetch('/api/photos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(photo),
+    });
+    return await r.json();
+  },
+  async deletePhoto(id) {
+    await fetch(`/api/photos?id=${id}`, { method: 'DELETE' });
+  },
+};
 
-function openDB() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = (e) => {
-      e.target.result.createObjectStore(STORE, { keyPath: 'id', autoIncrement: true });
+// Сжимаем фото перед загрузкой (не более 1200px, JPEG 75%)
+function compressImage(dataUrl, maxPx = 1200, quality = 0.75) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const ratio = Math.min(maxPx / img.width, maxPx / img.height, 1);
+      const canvas = document.createElement('canvas');
+      canvas.width  = Math.round(img.width  * ratio);
+      canvas.height = Math.round(img.height * ratio);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', quality));
     };
-    req.onsuccess = (e) => resolve(e.target.result);
-    req.onerror = (e) => reject(e.target.error);
-  });
-}
-
-async function dbAddPhoto(photo) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readwrite');
-    const req = tx.objectStore(STORE).add(photo);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = (e) => reject(e.target.error);
-  });
-}
-
-async function dbGetPhotos() {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readonly');
-    const req = tx.objectStore(STORE).getAll();
-    req.onsuccess = () => resolve(req.result.reverse());
-    req.onerror = (e) => reject(e.target.error);
-  });
-}
-
-async function dbDeletePhoto(id) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readwrite');
-    const req = tx.objectStore(STORE).delete(id);
-    req.onsuccess = () => resolve();
-    req.onerror = (e) => reject(e.target.error);
+    img.src = dataUrl;
   });
 }
 
 // ── Утилиты ──────────────────────────────────────────────────────────────────
 
-const STORAGE_KEY = 'летний-лагерь-v1';
 const dateKey = (d) => d.toISOString().slice(0, 10);
 const todayDate = () => new Date();
 
@@ -388,10 +387,6 @@ const formatDate = (dateStr) => {
   return d.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
 };
 
-const loadProgress = () => {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
-  catch { return {}; }
-};
 
 const RESULTS = [
   { id:'great', label:'Отлично', emoji:'🌟' },
@@ -690,6 +685,7 @@ function PostureExerciseCard({ ex }) {
 function PhotoSection() {
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [adding, setAdding] = useState(false);
   const [note, setNote] = useState('');
   const [view, setView] = useState('front');
@@ -698,7 +694,7 @@ function PhotoSection() {
   const fileRef = useRef();
 
   useEffect(() => {
-    dbGetPhotos().then(p => { setPhotos(p); setLoading(false); });
+    api.loadPhotos().then(p => { setPhotos(p); setLoading(false); });
   }, []);
 
   const handleFile = (e) => {
@@ -710,23 +706,23 @@ function PhotoSection() {
   };
 
   const handleSave = async () => {
-    if (!preview) return;
-    const entry = {
-      date: dateKey(todayDate()),
-      view,
-      note,
-      dataUrl: preview,
-    };
-    const id = await dbAddPhoto(entry);
-    setPhotos(prev => [{ ...entry, id }, ...prev]);
-    setPreview(null);
-    setNote('');
-    setAdding(false);
-    fileRef.current.value = '';
+    if (!preview || saving) return;
+    setSaving(true);
+    try {
+      const compressed = await compressImage(preview);
+      const { id } = await api.savePhoto({ date: dateKey(todayDate()), view, note, dataUrl: compressed });
+      setPhotos(prev => [{ id, date: dateKey(todayDate()), view, note, dataUrl: compressed }, ...prev]);
+      setPreview(null);
+      setNote('');
+      setAdding(false);
+      fileRef.current.value = '';
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async (id) => {
-    await dbDeletePhoto(id);
+    await api.deletePhoto(id);
     setPhotos(prev => prev.filter(p => p.id !== id));
   };
 
@@ -789,9 +785,9 @@ function PhotoSection() {
           <div className="flex gap-2">
             <button onClick={() => { setAdding(false); setPreview(null); setNote(''); fileRef.current.value = ''; }}
               className="flex-1 py-2.5 rounded-xl border border-gray-300 text-gray-500 text-sm">Отмена</button>
-            <button onClick={handleSave} disabled={!preview}
-              className={`flex-1 py-2.5 rounded-xl text-white text-sm font-semibold ${preview ? 'bg-teal-500 hover:bg-teal-600' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
-              Сохранить
+            <button onClick={handleSave} disabled={!preview || saving}
+              className={`flex-1 py-2.5 rounded-xl text-white text-sm font-semibold ${preview && !saving ? 'bg-teal-500 hover:bg-teal-600' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
+              {saving ? 'Сохраняю...' : 'Сохранить'}
             </button>
           </div>
         </div>
@@ -1111,18 +1107,29 @@ function ProgressView({ progress, onSave }) {
 
 function App() {
   const [view, setView] = useState('today');
-  const [progress, setProgress] = useState(loadProgress);
+  const [progress, setProgress] = useState({});
+  const [appLoading, setAppLoading] = useState(true);
+
+  useEffect(() => {
+    api.loadProgress().then(data => { setProgress(data); setAppLoading(false); });
+  }, []);
 
   const handleSave = useCallback((key, entry) => {
-    setProgress(prev => {
-      const next = { ...prev, [key]: entry };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      return next;
-    });
+    setProgress(prev => ({ ...prev, [key]: entry }));
+    api.saveProgress(key, entry);
   }, []);
 
   const todayStr = todayDate().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
-  const todayDone = !!progress[dateKey(todayDate())];
+  const todayDone = !!progress[dateKey(todayDate())]?.completed;
+
+  if (appLoading) return (
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="text-center">
+        <p className="text-4xl mb-3">☀️</p>
+        <p className="text-gray-400 text-sm">Загружаю данные...</p>
+      </div>
+    </div>
+  );
 
   return (
     <div className="max-w-md mx-auto min-h-screen flex flex-col">
